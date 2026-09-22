@@ -1,5 +1,7 @@
-using MDD4All.ObjectGraph.Access;
+﻿using MDD4All.ObjectGraph.Access;
 using MDD4All.Reflection;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using MDD4All.UI.DataModels.Tree;
 using System;
 
@@ -28,6 +30,19 @@ namespace MDD4All.DME.ViewModels.Editor
             }
             set
             {
+                // Asked before anything is written. The view sets and then reads back, so a
+                // value turned away here makes the field snap to what is still in the model.
+                IReadOnlyList<ValidationAttribute> broken = this.Annotations.Validate(value);
+
+                this.NoteBrokenRules(broken);
+
+                if (broken.Count > 0)
+                {
+                    // Not taken. Item keeps the value it had.
+                    this.OnPropertyChanged(nameof(Item));
+                    return;
+                }
+
                 if (base.Item != value)
                 {
                     base.Item = value;

@@ -1,4 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using MDD4All.DME.ViewModels.Annotations;
+using System.ComponentModel.DataAnnotations;
+using System.Threading.Tasks;
 using MDD4All.Reflection;
 using MDD4All.ObjectGraph.Access;
 using MDD4All.UI.DataModels.Tree;
@@ -16,7 +19,12 @@ namespace MDD4All.DME.ViewModels.Editor
                                         ITreeNode? parent = null, TypeAnalyzer? preAnalyzedResult = null)
         {
             this.Access = access;
-            this.Item = item;
+
+            // Straight into the field, not through the property. Derived nodes override the
+            // setter, and one of them asks Annotations - which is only built at the end of this
+            // constructor, because it needs the analyzer that runs below. Nothing here is a user
+            // edit either: the value comes out of the model and has no rule to answer to.
+            _item = item;
 
             this.Tree = tree;
             this.Parent = parent;
@@ -55,6 +63,18 @@ namespace MDD4All.DME.ViewModels.Editor
                 }
             }
 
+            // After the analyzer, because Type reads from it. A node hangs on a property or on
+            // nothing - the root, a list element, a dictionary entry - and then its type is what
+            // carries the annotations.
+            if (access is PropertyAccess annotatedProperty)
+            {
+                Annotations = new MemberAnnotations(annotatedProperty.PropertyInfo);
+            }
+            else
+            {
+                Annotations = new MemberAnnotations(this.Type);
+            }
+
             if (!string.IsNullOrEmpty(title))
             {
                 Title = title;
@@ -77,6 +97,76 @@ namespace MDD4All.DME.ViewModels.Editor
         #region Logic / Data
 
         public Access Access { get; set; } = null!;
+
+        // What the model declares about this place. Read once - see MemberAnnotations.
+        public MemberAnnotations Annotations { get; private set; } = null!;
+
+        private IReadOnlyList<ValidationAttribute> _brokenRules = new List<ValidationAttribute>();
+
+        // Which rules the last value offered here broke. The attributes, not sentences - a
+        // sentence is worded in whatever language is set when it is asked for, and that changes
+        // while the editor runs. The view puts them into words, see ValidationTextProvider.
+        public IReadOnlyList<ValidationAttribute> BrokenRules
+        {
+            get
+            {
+                return _brokenRules;
+            }
+        }
+
+        // Would this value be taken? Asked while someone is still typing, where the field should
+        // redden but no sentence should appear yet. Keeps nothing.
+        public bool IsValid(object? candidate)
+        {
+            return Annotations.Validate(candidate).Count == 0;
+        }
+
+        // How long a reason stays on screen before it fades out on its own.
+        private static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(8);
+
+        // Counts the attempts, so a timeout only clears the message it was started for. Type
+        // again and the older timeout finds a newer number and does nothing.
+        private int _messageAttempt;
+
+        // Kept separate from the value itself: the view sets this when it wants the reason shown.
+        protected void NoteBrokenRules(IReadOnlyList<ValidationAttribute> broken)
+        {
+            _brokenRules = broken;
+
+            OnPropertyChanged(nameof(BrokenRules));
+
+            if (broken.Count > 0)
+            {
+                ForgetMessagesLater();
+            }
+        }
+
+        private async void ForgetMessagesLater()
+        {
+            int attempt = ++_messageAttempt;
+
+            await Task.Delay(MessageLifetime);
+
+            // Nothing happened in between, so the reason has been read or ignored long enough.
+            if (attempt == _messageAttempt)
+            {
+                ClearBrokenRules();
+            }
+        }
+
+        // Typing is a new attempt, so the reason the last one failed goes away.
+        public void ClearBrokenRules()
+        {
+            if (_brokenRules.Count > 0)
+            {
+                _brokenRules = new List<ValidationAttribute>();
+
+                // Invalidates a timeout still waiting for the attempt just cleared.
+                _messageAttempt++;
+
+                OnPropertyChanged(nameof(BrokenRules));
+            }
+        }
 
         private object? _item;
 
@@ -379,91 +469,40 @@ namespace MDD4All.DME.ViewModels.Editor
             }
         }
 
-        // Reads the [Display(Name = ...)] annotation of the property this node
-        // hangs on (otherwise of its type); null if none is present.
+        // The label the model declares, translated into the picked language; null when there
+        // is none, or when the setting says to show the code's own names instead.
         private string? GetDisplayAnnotationName()
         {
             string? result = null;
 
-            // Turned off in the settings, so the node shows what the property is called in the
-            // code. Asked before the attributes are read at all - there is nothing to look for.
-            if (Tree is ObjectTreeViewModel settingsSource && !settingsSource.ShowAnnotationNames)
+            if (Tree is ObjectTreeViewModel objectTree)
             {
-                return null;
-            }
-
-            try
-            {
-                // Where to look: the property this node hangs on, or - for the
-                // root and anything not reached via a property - the type itself.
-                object[] attributes;
-
-                if (Access is PropertyAccess propertyAccess)
+                if (!objectTree.ShowAnnotationNames)
                 {
-                    // All attribute instances attached to the property, e.g. [Display],
-                    // [DataType], [Required], ... (false = no inherited attributes).
-                    attributes = propertyAccess.PropertyInfo.GetCustomAttributes(false);
-                }
-                else
-                {
-                    attributes = Type.GetCustomAttributes(false);
+                    return null;
                 }
 
-                // Find the [Display] attribute among them. "is" checks the type
-                // and casts in one step.
-                foreach (object attribute in attributes)
+                if (Annotations.Display != null && objectTree.AnnotationTexts != null)
                 {
-                    if (attribute is DisplayAttribute displayAttribute)
-                    {
-                        result = displayAttribute.Name;
-
-                        // The tree is how a node reaches the provider that reads the data
-                        // model's own resources.
-                        if (Tree is ObjectTreeViewModel objectTree && objectTree.AnnotationTexts != null)
-                        {
-                            result = objectTree.AnnotationTexts.Resolve(displayAttribute);
-                        }
-
-                        // The attribute can only appear once, first hit is the only hit.
-                        break;
-                    }
+                    // Display.Name is a resource key here, not a text - the provider turns it
+                    // into one, freshly on every render and in whatever language is set.
+                    result = objectTree.AnnotationTexts.Resolve(Annotations.Display);
                 }
-            }
-            catch
-            {
-                // Attributes come from a data-model DLL loaded at runtime - if one
-                // of them can't be constructed, act as if no label exists.
-                result = null;
             }
 
             return result;
         }
 
-        // Reads a [DataType] attribute hint (e.g. "MultilineText") so the editor can pick a fitting input control.
+        // Which input control fits this value, e.g. "MultilineText".
         public string? DataTypeAnnotation
         {
             get
             {
                 string? result = null;
 
-                // Only properties carry this annotation - same reading pattern as GetDisplayAnnotationName.
-                if (Access is PropertyAccess propertyAccess)
+                if (Annotations.DataType != null)
                 {
-                    try
-                    {
-                        foreach (object attribute in propertyAccess.PropertyInfo.GetCustomAttributes(false))
-                        {
-                            if (attribute is DataTypeAttribute dataTypeAttribute)
-                            {
-                                result = dataTypeAttribute.GetDataTypeName();
-                                break;
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        result = null;
-                    }
+                    result = Annotations.DataType.GetDataTypeName();
                 }
 
                 return result;
