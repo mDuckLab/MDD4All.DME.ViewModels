@@ -81,6 +81,22 @@ namespace MDD4All.DME.ViewModels.Editor
             }
         }
 
+        public bool ShowMoveModeButton
+        {
+            get
+            {
+                bool result = false;
+
+                // A single element has nowhere to go, so the mode would show two dead arrows.
+                if (_viewModel is IndexedCollectionEditorViewModel && _viewModel.Children.Count > 1)
+                {
+                    result = true;
+                }
+
+                return result;
+            }
+        }
+
         public bool ShowDeleteButton
         {
             get
@@ -122,6 +138,28 @@ namespace MDD4All.DME.ViewModels.Editor
         public bool IsExpanded { get; set; } = false;
 
         public bool IsDeleteMode { get; set; } = false;
+
+        private bool _isMoveMode = false;
+
+        public bool IsMoveMode
+        {
+            get
+            {
+                bool result = false;
+
+                // Deleting down to one element takes the button away; the mode goes with it.
+                if (_isMoveMode && this.ShowMoveModeButton)
+                {
+                    result = true;
+                }
+
+                return result;
+            }
+            set
+            {
+                _isMoveMode = value;
+            }
+        }
 
         public bool CanRenderChildren
         {

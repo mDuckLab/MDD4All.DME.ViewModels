@@ -1,8 +1,9 @@
-using CommunityToolkit.Mvvm.Input;
+﻿using CommunityToolkit.Mvvm.Input;
 using MDD4All.Reflection;
 using MDD4All.ObjectGraph.Access;
 using MDD4All.UI.DataModels.Tree;
 using System;
+using System.Collections;
 using System.ComponentModel;
 using System.Windows.Input;
 
@@ -30,6 +31,8 @@ namespace MDD4All.DME.ViewModels.Editor
             this.AddItemCommand = new RelayCommand(ExecuteAddItem);
             this.CreateInstanceCommand = new RelayCommand(ExecuteCreateInstance);
             this.DeleteAtIndexCommand = new RelayCommand<int>(ExecuteDeleteAtIndex);
+            this.MoveItemUpCommand = new RelayCommand<int>(ExecuteMoveItemUp);
+            this.MoveItemDownCommand = new RelayCommand<int>(ExecuteMoveItemDown);
         }
         #endregion
 
@@ -110,6 +113,57 @@ namespace MDD4All.DME.ViewModels.Editor
         public ICommand DeleteAtIndexCommand { get; protected set; } = null!;
 
         protected abstract void ExecuteDeleteAtIndex(int index);
+
+        public ICommand MoveItemUpCommand { get; protected set; } = null!;
+
+        protected void ExecuteMoveItemUp(int index)
+        {
+            this.MoveItem(index, index - 1);
+        }
+
+        public ICommand MoveItemDownCommand { get; protected set; } = null!;
+
+        protected void ExecuteMoveItemDown(int index)
+        {
+            this.MoveItem(index, index + 1);
+        }
+
+        // Two places trade contents: first in the data, then in the tree. List and array both
+        // answer as IList - the same assumption UpdateParentReference already makes.
+        private void MoveItem(int fromIndex, int toIndex)
+        {
+            if (this.Item is IList collection)
+            {
+                int count = Math.Min(collection.Count, this.Children.Count);
+
+                if (fromIndex < 0 || fromIndex >= count)
+                {
+                    return;
+                }
+
+                if (toIndex < 0 || toIndex >= count)
+                {
+                    return;
+                }
+
+                object? moved = collection[fromIndex];
+                collection[fromIndex] = collection[toIndex];
+                collection[toIndex] = moved;
+
+                this.Children.Move(fromIndex, toIndex);
+
+                if (fromIndex < toIndex)
+                {
+                    this.ReorderIndexChild(fromIndex);
+                }
+                else
+                {
+                    this.ReorderIndexChild(toIndex);
+                }
+
+                this.RaiseStateChanged();
+            }
+        }
         #endregion
     }
 }
