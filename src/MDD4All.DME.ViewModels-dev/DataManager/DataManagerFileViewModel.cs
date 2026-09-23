@@ -1,10 +1,11 @@
-using MDD4All.DME.DataAccess.DataFiles;
+﻿using MDD4All.DME.DataAccess.DataFiles;
 using MDD4All.DME.DataAccess.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MDD4All.DME.Configurations;
 using MDD4All.FileAccess.Contracts;
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Threading;
 using System.Windows.Input;
@@ -28,6 +29,10 @@ namespace MDD4All.DME.ViewModels.DataManager
             _dataManagerSettings = dataManagerSettings;
             _dataManagerModel = dataManagerModel;
             _dataManagerObject = dataManagerObject;
+
+            // The status line carries the document's unsaved mark, so it has to hear about it.
+            _dataManagerObject.PropertyChanged += this.OnDataManagerObjectPropertyChanged;
+
             _dataFileProvider = dataFileProvider;
             _dataSerializer = dataSerializer;
             _dictionaryKeyAnalyzer = dictionaryKeyAnalyzer;
@@ -37,9 +42,11 @@ namespace MDD4All.DME.ViewModels.DataManager
 
         private void InitializeCommands()
         {
-            this.NewDataFileCommand = new RelayCommand(this.ExecuteNewDataFile);
-            this.OpenRecentDataFileCommand = new RelayCommand<int>(this.ExecuteOpenRecentDataFile);
-            this.OpenDataFileCommand = new RelayCommand(this.ExecuteOpenDataFile);
+            // All three replace the open document, so none of them runs before what is unwritten
+            // in it has been answered for.
+            this.NewDataFileCommand = new RelayCommand(this.RequestNewDataFile);
+            this.OpenRecentDataFileCommand = new RelayCommand<int>(this.RequestOpenRecentDataFile);
+            this.OpenDataFileCommand = new RelayCommand(this.RequestOpenDataFile);
             this.ConfirmOpenDataFileCommand = new RelayCommand(this.ExecuteConfirmOpenDataFile);
             this.SaveDataFileCommand = new RelayCommand(this.ExecuteSaveDataFile);
             this.SaveDataFileAsCommand = new RelayCommand(this.ExecuteSaveDataFileAs);
@@ -122,6 +129,12 @@ namespace MDD4All.DME.ViewModels.DataManager
                 if (_dataManagerObject.HasContent)
                 {
                     result = "Filename: " + this.CurrentFilePath;
+
+                    if (_dataManagerObject.HasUnsavedChanges)
+                    {
+                        result += " *";
+                    }
+
                     result += " ● Data Model: " + _dataManagerSettings.CurrentDataModel!.FullTypeName;
                 }
                 return result;
@@ -212,6 +225,96 @@ namespace MDD4All.DME.ViewModels.DataManager
         public ICommand SaveDataFileCommand { get; private set; } = null!;
 
         public ICommand SaveDataFileAsCommand { get; private set; } = null!;
+        #endregion
+
+        #region Unsaved Changes
+        // What to do once the question has been answered. Null while nothing is waiting.
+        private Action? _pendingDocumentChange;
+
+        private bool _showUnsavedChangesWarning = false;
+
+        // MainViewModel watches this and puts the dialog on screen.
+        public bool ShowUnsavedChangesWarning
+        {
+            get
+            {
+                return _showUnsavedChangesWarning;
+            }
+
+            private set
+            {
+                _showUnsavedChangesWarning = value;
+                this.OnPropertyChanged(nameof(ShowUnsavedChangesWarning));
+            }
+        }
+
+        private void RequestNewDataFile()
+        {
+            this.GuardUnsavedChanges(this.ExecuteNewDataFile);
+        }
+
+        private void RequestOpenDataFile()
+        {
+            this.GuardUnsavedChanges(this.ExecuteOpenDataFile);
+        }
+
+        private void RequestOpenRecentDataFile(int index)
+        {
+            this.GuardUnsavedChanges(() => this.ExecuteOpenRecentDataFile(index));
+        }
+
+        // The window wants to go away, which replaces the open document as surely as opening
+        // another one does - so it asks the same question.
+        public void RequestShutdown(Action closeWindow)
+        {
+            this.GuardUnsavedChanges(closeWindow);
+        }
+
+        private void GuardUnsavedChanges(Action continueWith)
+        {
+            if (_dataManagerObject.HasUnsavedChanges)
+            {
+                _pendingDocumentChange = continueWith;
+                this.ShowUnsavedChangesWarning = true;
+            }
+            else
+            {
+                continueWith();
+            }
+        }
+
+        public void AnswerUnsavedChanges(UnsavedChangesAnswer answer)
+        {
+            this.ShowUnsavedChangesWarning = false;
+
+            Action? pending = _pendingDocumentChange;
+            _pendingDocumentChange = null;
+
+            if (pending == null)
+            {
+                return;
+            }
+
+            if (answer == UnsavedChangesAnswer.Discard)
+            {
+                pending();
+            }
+            else if (answer == UnsavedChangesAnswer.Save)
+            {
+                this.ExecuteSaveDataFile();
+
+                // Saving can ask again - Save As has no path yet, and complex keys want an
+                // answer of their own. Two questions on top of each other help nobody, so only
+                // a document that came out clean is replaced. Otherwise the second question has
+                // taken over and this switch is dropped.
+                if (!_dataManagerObject.HasUnsavedChanges)
+                {
+                    pending();
+                }
+            }
+
+            // Cancel: the document stays exactly as it is.
+        }
         #endregion
 
         #region Command Implementations
@@ -517,6 +620,9 @@ namespace MDD4All.DME.ViewModels.DataManager
                                     _dataManagerSettings.SaveTypeInformation,
                                     _dataManagerSettings.WriteComplexDictionaryKeys);
 
+            // What stands in the file is now what stands in memory.
+            _dataManagerObject.MarkSaved();
+
             DataFileDescriptor dataFileDescriptor = new DataFileDescriptor()
             {
                 DataModelDescription = _dataManagerSettings.CurrentDataModel!,
@@ -531,6 +637,14 @@ namespace MDD4All.DME.ViewModels.DataManager
             }
 
             this.OnPropertyChanged(nameof(StatusText));
+        }
+
+        private void OnDataManagerObjectPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DataManagerObjectViewModel.HasUnsavedChanges))
+            {
+                this.OnPropertyChanged(nameof(StatusText));
+            }
         }
 
         // The serialization view model reports the cause and stays free of wording - phrasing it

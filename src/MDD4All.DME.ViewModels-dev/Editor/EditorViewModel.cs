@@ -199,6 +199,10 @@ namespace MDD4All.DME.ViewModels.DataManager
             }
             else if (e.PropertyName == "TreeChanged")
             {
+                // Every change in the graph passes through here, so this is the only place that
+                // has to say the document is no longer what is on disk.
+                _dataManagerObject.MarkChanged();
+
                 OnPropertyChanged(nameof(SelectedEditorViewModel));
             }
         }

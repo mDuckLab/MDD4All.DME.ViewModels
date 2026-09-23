@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 
 namespace MDD4All.DME.ViewModels.DataManager
@@ -34,6 +34,38 @@ namespace MDD4All.DME.ViewModels.DataManager
             }
         }
 
+        private bool _hasUnsavedChanges = false;
+
+        // Whether the graph has been touched since it was last written to disk.
+        public bool HasUnsavedChanges
+        {
+            get
+            {
+                return _hasUnsavedChanges;
+            }
+        }
+
+        // The editor changed something below the root.
+        public void MarkChanged()
+        {
+            this.SetUnsavedChanges(true);
+        }
+
+        // Written to disk.
+        public void MarkSaved()
+        {
+            this.SetUnsavedChanges(false);
+        }
+
+        private void SetUnsavedChanges(bool value)
+        {
+            if (_hasUnsavedChanges != value)
+            {
+                _hasUnsavedChanges = value;
+                this.OnPropertyChanged(nameof(HasUnsavedChanges));
+            }
+        }
+
         public bool HasContent
         {
             get
@@ -51,6 +83,9 @@ namespace MDD4All.DME.ViewModels.DataManager
         {
             _rootType = rootType;
             _rootObject = rootObject;
+
+            // A document that was just read or created carries nothing unwritten.
+            this.SetUnsavedChanges(false);
 
             this.OnPropertyChanged(nameof(RootType));
             this.OnPropertyChanged(nameof(RootObject));

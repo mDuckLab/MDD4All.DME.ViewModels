@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System.ComponentModel;
 
 namespace MDD4All.DME.ViewModels.DataManager
@@ -131,6 +131,23 @@ namespace MDD4All.DME.ViewModels.DataManager
             ViewState = ViewState.ShowStartPage;
         }
 
+        // Only worth offering while something is open - otherwise the editor has nothing to show.
+        public bool CanShowEditor
+        {
+            get
+            {
+                return _dataManagerObject.RootObject != null;
+            }
+        }
+
+        public void ShowEditor()
+        {
+            if (this.CanShowEditor)
+            {
+                ViewState = ViewState.ShowEditor;
+            }
+        }
+
         #endregion
 
         #region Event Handlers
@@ -140,6 +157,7 @@ namespace MDD4All.DME.ViewModels.DataManager
         {
             if (e.PropertyName == nameof(DataManagerObjectViewModel.RootObject))
             {
+                OnPropertyChanged(nameof(CanShowEditor));
                 ViewState = ViewState.ShowEditor;
             }
         }
@@ -163,6 +181,17 @@ namespace MDD4All.DME.ViewModels.DataManager
                 if (_dataFileManager.SaveWarningMessage != "")
                 {
                     ShowNotification(_dataFileManager.SaveWarningMessage, NotificationSeverity.Error);
+                }
+            }
+            else if (e.PropertyName == nameof(DataManagerFileViewModel.ShowUnsavedChangesWarning))
+            {
+                if (_dataFileManager.ShowUnsavedChangesWarning)
+                {
+                    ActiveOverlay = OverlayState.UnsavedChanges;
+                }
+                else
+                {
+                    ActiveOverlay = OverlayState.None;
                 }
             }
             else if (e.PropertyName == nameof(DataManagerFileViewModel.ShowComplexKeyWarning))
