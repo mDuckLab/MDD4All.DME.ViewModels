@@ -6,6 +6,40 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- What the listing on a package feed shows. The version is only a fallback: the
+       build hands in the real one, read from src/version.txt plus the run number. -->
+  <PropertyGroup>
+    <Version>2.0.0.0</Version>
+    <Authors>mDuckLab</Authors>
+    <Company>MDD4All.de</Company>
+    <Copyright>(c) 2026 mDuckLab</Copyright>
+    <Description>The view models of MDD4All.DME, the object graph editor: the tree built from whatever object it is handed, the open document, the settings, and the rules a data model declares through its annotations.</Description>
+    <PackageTags>MVVM ViewModels ObjectGraph Editor DataAnnotations</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>Nuget.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <!-- Where the package came from, and what a debugger needs to step into this code from
+       a project that only has the package. The repository address is not written out: it is
+       read from the git remote while packing, so moving the repository changes nothing here. -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Nuget.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
@@ -13,17 +47,22 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="MDD4All.Reflection.TypeAnalyzer" Version="2.0.0.7" />
+    <PackageReference Include="MDD4All.UI.DataModels" Version="2.0.0.3" />
+    <PackageReference Include="MDD4All.Configuration" Version="3.0.0.15" />
+    <PackageReference Include="MDD4All.FileAccess.Contracts" Version="2.0.1.4" />
   </ItemGroup>
 
+  <!-- Waiting on a package. None of these is published yet, so no package can be built
+       from here until they are:
+         MDD4All.Localization
+         MDD4All.AssemblyLoading.Contracts
+         MDD4All.DME.AssemblyTree
+         MDD4All.DME.DataAccess  -  prepared, not published -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\MDD4All.Localization\src\MDD4All.Localization\MDD4All.Localization-dev.csproj" />
-    <ProjectReference Include="..\..\..\MDD4All.Reflection.TypeAnalyzer\src\MDD4All.Reflection.TypeAnalyzer\MDD4All.Reflection.TypeAnalyzer-dev.csproj" />
-    <ProjectReference Include="..\..\..\MDD4All.UI.DataModels\src\MDD4All.UI.DataModels\MDD4All.UI.DataModels-dev.csproj" />
-    <ProjectReference Include="..\..\..\MDD4All.Configuration\src\MDD4All.Configuration\MDD4All.Configuration-dev.csproj" />
-    <ProjectReference Include="..\..\..\MDD4All.FileAccess.Contracts\src\MDD4All.FileAccess.Contracts\MDD4All.FileAccess.Contracts-dev.csproj" />
     <ProjectReference Include="..\..\..\MDD4All.AssemblyLoading.Contracts\src\MDD4All.AssemblyLoading.Contracts\MDD4All.AssemblyLoading.Contracts-dev.csproj" />
     <ProjectReference Include="..\..\..\MDD4All.DME.AssemblyTree\src\MDD4All.DME.AssemblyTree\MDD4All.DME.AssemblyTree-dev.csproj" />
     <ProjectReference Include="..\..\..\MDD4All.DME.DataAccess\src\MDD4All.DME.DataAccess\MDD4All.DME.DataAccess-dev.csproj" />
   </ItemGroup>
-
 </Project>
